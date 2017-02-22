@@ -1,7 +1,7 @@
 library(ggplot2)
 library(dplyr)
-control_chloro <- read.csv("~/bep_daphnia_feeding_experiment/Data/control_chloro.csv")
-daphnia_chloro <- read.csv("~/bep_daphnia_feeding_experiment/Data/daphnia_chloro.csv")
+control_chloro <- read.csv("~/Basic_Ecological_Processes/Data/control_chloro.csv")
+daphnia_chloro <- read.csv("~/Basic_Ecological_Processes/Data/daphnia_chloro.csv")
 
 controls_means <- control_chloro %>%
   filter(conc_diff<24)%>%
