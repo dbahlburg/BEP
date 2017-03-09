@@ -123,7 +123,7 @@ Ergebnis: Der Modellvergleich zeigt, dass food_conc das Modell signifikant besse
 #### Plots
 
 #### Statistik
-```{r, echo=T, message=F, warning=FALSE} 
+```{r, echo=T, message=F, results='hide',warning=FALSE} 
 trockengewichte <- read.csv("~/Basic_Ecological_Processes/Data/trockengewichte.csv")
 bartlett.test(Daphien_Anzahl~Futter_Hist,data=trockengewichte)
 bartlett.test(Daphien_Anzahl~Futter_Quant,data=trockengewichte)
@@ -139,7 +139,6 @@ b<-b[b[,4]>0.05,]
 ```
 ### Hypothesen-Plots
 Wir haben unsere Hypothesen lieber direkt graphisch dargestellt, um einen spaeteren Vergleich mit den Messergebnissen visuell ansprechender, einfacher und leichter nachvollziehbarer zu machen.
-Der Code ist nicht elegant aber erledigt seinen Job...
 
 ```{r,echo=T}
 conc <- 1:40
