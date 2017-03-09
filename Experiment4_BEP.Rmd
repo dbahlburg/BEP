@@ -1,0 +1,203 @@
+---
+title: "Experiment4_BEP"
+author: "Dominik Bahlburg Lukas Hueppe"
+date: "February 24"
+output:
+  html_document:
+    toc: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Intro
+Das ist das zusammengefasste R-Skript von Dominik Bahlburg und Lukas Hueppe zum Experiment 4 des Praktikums
+Basic Ecological Processes in 2017
+
+### Laden der benoetigten packages
+```{r, echo=T, message=F, warning=FALSE} 
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(nlme)
+library(reshape2)
+```
+
+### Experiment Functional Response
+#### Daten einladen und zusammenfassen
+```{r, echo=T, message=T, warning=FALSE} 
+control_chloro <- read.csv("~/Basic_Ecological_Processes/Data/control_chloro.csv")
+daphnia_chloro <- read.csv("~/Basic_Ecological_Processes/Data/daphnia_chloro.csv")
+```
+Berechnung der mittleren Chlorophyllkonzentration + Standardabweichung in den Kontrollglaesern 
+am jeweilen Endtag (nach 24h, wenn die Daphnien umgesetzt und neues Medium gemacht wurde)
+```{r, echo=T, message=T, warning=FALSE} 
+controls_means <- control_chloro %>%
+  filter(conc_diff<24)%>% #extremer Ausreisser, vermutlich falsches Glas gemessen
+  group_by(date,setup,food_conc)%>%
+  summarise(ctrl_conc=mean(end_conc),sd(end_conc))
+```
+Anfuegen der mittleren Chlorophyllkonzentrationen an Daphnien-Messdaten und anschliessend Berechnung
+der Fressrate in ug/Tag (daher Faktor 0.2, um von der Konzentration wegzukommen). Dafuer ziehen wir von der in den Daphnien-Glaesern Chlorophyllkonz die Mittelwerte der Kontrollen ab und interpretieren den Unterschied als das von den Daphnien konsumierte Chlorophyll. Ausserdem wird die Fressrate pro Daphnie berechnet, indem wir den Wert durch die Anzahl der Daphnien teilen
+```{r, echo=T, message=T, warning=FALSE} 
+feeding_rate <- merge(daphnia_chloro,controls_means[,1:4],by=c('date','food_conc')) %>%
+  mutate(feeding_rate=-0.2*(chloro_conc-ctrl_conc), feeding_per_capita=feeding_rate/daphnia_count)
+```
+Das hier ist eigentlich nicht so wichtig: Uns hat nur interessiert, mit welchen Startkonzentrationen
+wir im Mittel wirklich (also gemessen) gestartet sind. Dafuer mitteln wir die gemessenen Startkonz.
+von Chlorophyll in den Kontrollen ueber die Replikate (wie zuvor von den Endkonz) und Zeitpunkte. 
+Deswegen erfordert das hier auch den Extraschritt und kann nicht oben gemacht werden, da wir hier ueber Zeit mitteln, was wir oben mit den Endkonz. nicht machen.
+```{r, echo=T, message=T, warning=FALSE} 
+mean_start_concs <- control_chloro %>%
+  group_by(food_conc) %>%
+  summarise(start_conc=mean(start_conc))
+feeding_rate <- merge(feeding_rate,mean_start_concs,by='food_conc')  
+feeding_rate$start_conc<-round(0.2*feeding_rate$start_conc,digits=1)
+```
+Hier mitteln wir jetzt noch die Fressraten, um sie letztendlich graphisch darstellen zu koennen.
+```{r, echo=T, message=T, warning=FALSE} 
+feeding_rate_means <- feeding_rate %>%
+  group_by(date,food,food_conc)%>%
+  summarise(mean_feeding_rate=mean(feeding_rate),sd_feeding_rate=sd(feeding_rate),mean_feeding_per_capita=mean(feeding_per_capita),sd_feeding_per_capita=sd(feeding_per_capita)) %>%
+  merge(.,mean_start_concs,by='food_conc') 
+feeding_rate_means$start_conc<-round(0.2*feeding_rate_means$start_conc,digits=1)
+```
+
+#### Plots machen
+Plots der Mittelwerte mit Fehlerbalken
+```{r, echo=T, message=T, warning=FALSE} 
+f_rate_mean <- ggplot(feeding_rate_means,aes(x=factor(start_conc),y=mean_feeding_per_capita,colour=date))+
+  geom_point()+
+  geom_hline(aes(yintercept=0))+
+  ylab('Fressrate [ug Chl a pro Tag]')+
+  xlab('Startchlorophyll [ug]')+
+  geom_errorbar(aes(ymin=mean_feeding_per_capita-sd_feeding_per_capita,ymax=mean_feeding_per_capita+sd_feeding_per_capita), width = 0.25)+
+  theme_bw()
+ggsave('f_rate_mean.png',plot = f_rate_mean, width = 8, height = 6)
+f_rate_mean
+```
+
+Das gleiche nochmal als Boxplot und mit allen Daten, um einen etwas umfassenderen Einblick in die Daten zu bekommen
+```{r, echo=T, message=T, warning=FALSE} 
+ggplot(feeding_rate,aes(x=factor(start_conc),y=feeding_per_capita,colour=date))+
+  geom_boxplot()+
+  geom_hline(aes(yintercept=0))+
+  ylab('Fressrate [ug Chl a pro Tag]')+
+  xlab('Startchlorophyll [ug]')
+```
+
+#### Statistik
+Histogramm und Bartlett-test. Die Daten sind furchtbar und es laesst sich nicht wirklcih
+Statistik damit machen. Allerhoechstens noch ein Kruskal-Wallis-Test aber das grosse Problem
+ist die zwischentagliche Variabilitaet. Scheinbar hat der Tag der Messung einen grossen 
+ziemlich willkuerlichen Einfluss auf unsere Messdaten gehabt --> mixed effect models - siehe unten
+```{r, echo=T, message=T, warning=FALSE} 
+hist(log(feeding_rate$feeding_per_capita+0.1))
+bartlett.test(log(feeding_per_capita+0.1)~food_conc,data=feeding_rate)
+qqnorm(log(feeding_rate$feeding_per_capita+0.1))
+```
+
+Mixed Effects Models: Da wir den Verdacht haben, dass date einen ungerichteten aber klaren Effekt auf unsere Daten hat, koennen wir also Datum als Zufallseffekt in ein Modell einbauen. Um zu validieren, ob dieser Effekt wirklich signifikant ist, testen wir ein Modell mit mixed effect gegen ein Modell ohne mixed effect. 
+
+```{r, echo=T, message=T, warning=FALSE} 
+feeding_rate_linear  =  gls(feeding_per_capita  ~  food_conc, data=feeding_rate, method="REML")
+feeding_rate_rand  =  lme(feeding_per_capita  ~ food_conc, random = ~1 | date, data=feeding_rate, method="REML")
+anova(feeding_rate_linear,feeding_rate_rand)
+```
+wir sehen am p-value von 7e-04, dass ein Zufallseffekt basierend auf date das Modell signifikant verbessert.
+
+Um jetzt herauszufinden, ob food_conc die Fressrate signifikant beeinflusst, vergleichen wir ein Modell mit diesem fixed factor mit einem, das ihn nicht beruecksichtigt: 
+```{r, echo=T, message=T, warning=FALSE} 
+feeding_rate_mem  =  lmer(feeding_per_capita  ~  food_conc  +  (1|date), data=feeding_rate,REML=FALSE)
+feeding_rate_mem_red  =  lmer(feeding_per_capita  ~  (1|date), data=feeding_rate,REML=FALSE)
+anova(feeding_rate_mem_red,feeding_rate_mem)
+```
+
+Ergebnis: Der Modellvergleich zeigt, dass food_conc das Modell signifikant besser macht, was bedeutet, dass die Startkonzentration einen signifikanten Effekt auf die Fressrate hat. p=0.0022, x^2=9.33. Zudem sehen wir am slope 0.003268, dass die Fressrate mit steigender Startkonzentration ansteigt (genau genommen um ~0.0033 pro ug Chla/l)
+
+### Experiment Numeric Response
+#### Daten einladen und zusammenfassen
+
+#### Plots
+
+#### Statistik
+```{r, echo=T, message=F, warning=FALSE} 
+trockengewichte <- read.csv("~/Basic_Ecological_Processes/Data/trockengewichte.csv")
+bartlett.test(Daphien_Anzahl~Futter_Hist,data=trockengewichte)
+bartlett.test(Daphien_Anzahl~Futter_Quant,data=trockengewichte)
+TukeyHSD(aov(Daphien_Anzahl~Futter_Hist*factor(Futter_Quant),data=trockengewichte))
+
+bartlett.test(log(Ind_Gewicht)~Futter_Hist,data=trockengewichte)
+bartlett.test(log(Ind_Gewicht)~Futter_Quant,data=trockengewichte)
+summary(aov(log(Ind_Gewicht)~Futter_Hist*factor(Futter_Quant),data=trockengewichte))
+a<-TukeyHSD(aov(log(Ind_Gewicht)~Futter_Hist*factor(Futter_Quant),data=trockengewichte))
+b<-as.data.frame(a[3])
+#herausfiltern der signifikanten Vergleiche, um das Ganze ein bisschen übersichtlicher zu haben...
+b<-b[b[,4]>0.05,] 
+```
+### Hypothesen-Plots
+Wir haben unsere Hypothesen lieber direkt graphisch dargestellt, um einen spaeteren Vergleich mit den Messergebnissen visuell ansprechender, einfacher und leichter nachvollziehbarer zu machen.
+Der Code ist nicht elegant aber erledigt seinen Job...
+
+```{r,echo=T}
+conc <- 1:40
+feeding_rate <- 1:40
+for (i in 1:40){
+  if (i<10){
+    feeding_rate[i] <- i*0.1}
+  else{
+    feeding_rate[i] <- 1
+  }
+}
+fr1<-as.data.frame(cbind(conc,feeding_rate))
+fr1_p <- ggplot(fr1, aes(x=conc,y=feeding_rate))+
+  geom_line(colour='#6e9c19',size=1.7) +
+  labs(x='food concentration',
+       y='feeding rate')+
+  ylim(0,2.8)+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title.x = element_text(vjust=25),
+        panel.grid = element_line(colour = '#FFFFFF'),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"))
+fr1_p
+
+#Hypothesis 2
+biom_S <- 1:40
+biom_SgDOM <- 1:40
+biom_S_DOM <- 1:40
+
+for (i in 1:40){
+  if (i<10){
+    biom_S[i] <- i*0.1
+    biom_SgDOM[i] <- i*0.2
+    biom_S_DOM[i] <- i*0.15}
+  else{
+    biom_S[i] <- 1
+    biom_SgDOM[i] <- 2
+    biom_S_DOM[i] <- 1.5
+  }
+}
+H2 <- as.data.frame(cbind(conc,biom_S,biom_SgDOM,biom_S_DOM))
+H2 <- melt(H2, id.vars = 'conc')
+
+H2_p <- ggplot(H2, aes(x=conc,y=value,colour=variable))+
+  geom_line(size=1.7) +
+  scale_color_manual(values=c('#0FBF12','#E62C29','#E8AF05'))+
+  labs(x='food concentration',
+       y='body weight')+
+  ylim(0,5)+
+  xlim(0,45)+
+  annotate("text", x=c(43,43,43), y= c(1,1.5,2), label=c('S','S+DOM','SgDOM'))+
+  theme_bw()+
+  theme(axis.text = element_blank(),
+        axis.title.x = element_text(vjust=25),
+        panel.grid = element_line(colour = '#FFFFFF'),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position="none")
+H2_p
+```
