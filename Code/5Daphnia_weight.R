@@ -6,8 +6,7 @@
 
 
 # reading in Data from csv file "trockengewichte" 
-trockengewichte <- read.csv("C:/Users/Lukas H?ppe/Dropbox/BEP/trockengewichte.csv")
-
+trockengewichte <- read.csv("~/Basic_Ecological_Processes/Data/trockengewichte.csv")
 library(dplyr)
 library(ggplot2)
 

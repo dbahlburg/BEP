@@ -13,8 +13,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ### Intro
-Das ist das zusammengefasste R-Skript von Dominik Bahlburg und Lukas Hueppe zum Experiment 4 des Praktikums
-Basic Ecological Processes in 2017
+Das zusammengefasste R-Skript von Dominik Bahlburg und Lukas Hueppe zum Experiment 4 des Praktikums
+Basic Ecological Processes (2017)
 
 ### Laden der benoetigten packages
 ```{r, echo=T, message=F, warning=FALSE} 
@@ -24,7 +24,7 @@ library(lme4)
 library(nlme)
 library(reshape2)
 ```
-
+***
 ### Experiment Functional Response
 #### Daten einladen und zusammenfassen
 ```{r, echo=T, message=T, warning=FALSE} 
@@ -71,11 +71,11 @@ Plots der Mittelwerte mit Fehlerbalken
 f_rate_mean <- ggplot(feeding_rate_means,aes(x=factor(start_conc),y=mean_feeding_per_capita,colour=date))+
   geom_point()+
   geom_hline(aes(yintercept=0))+
-  ylab('Fressrate [ug Chl a pro Tag]')+
-  xlab('Startchlorophyll [ug]')+
+  ylab(expression(paste('Fressrate [', mu, 'g Chl a pro Tag]')))+
+  xlab(expression(paste('Startchlorophyll [', mu,'g]')))+
   geom_errorbar(aes(ymin=mean_feeding_per_capita-sd_feeding_per_capita,ymax=mean_feeding_per_capita+sd_feeding_per_capita), width = 0.25)+
   theme_bw()
-ggsave('f_rate_mean.png',plot = f_rate_mean, width = 8, height = 6)
+ggsave('~/Basic_Ecological_Processes/Plots/f_rate_mean.png',plot = f_rate_mean, width = 8, height = 6)
 f_rate_mean
 ```
 
@@ -84,8 +84,8 @@ Das gleiche nochmal als Boxplot und mit allen Daten, um einen etwas umfassendere
 ggplot(feeding_rate,aes(x=factor(start_conc),y=feeding_per_capita,colour=date))+
   geom_boxplot()+
   geom_hline(aes(yintercept=0))+
-  ylab('Fressrate [ug Chl a pro Tag]')+
-  xlab('Startchlorophyll [ug]')
+  ylab(expression(paste('Fressrate [',mu, 'g Chl a pro Tag]')))+
+  xlab(expression(paste('Startchlorophyll [', mu,'g]')))
 ```
 
 #### Statistik
@@ -117,14 +117,78 @@ anova(feeding_rate_mem_red,feeding_rate_mem)
 
 Ergebnis: Der Modellvergleich zeigt, dass food_conc das Modell signifikant besser macht, was bedeutet, dass die Startkonzentration einen signifikanten Effekt auf die Fressrate hat. p=0.0022, x^2=9.33. Zudem sehen wir am slope 0.003268, dass die Fressrate mit steigender Startkonzentration ansteigt (genau genommen um ~0.0033 pro ug Chla/l)
 
+***
 ### Experiment Numeric Response
 #### Daten einladen und zusammenfassen
-
+```{r, echo=T, message=T, warning=FALSE} 
+trockengewichte <- read.csv("~/Basic_Ecological_Processes/Data/trockengewichte.csv")
+# creating new data frame 'weight_mean' with the following calculated values:
+weight_mean <- trockengewichte %>%  
+  group_by(Futter_Hist,Futter_Quant) %>%  
+  filter(Trockenbiomasse>0) %>%                                           # negative Werte von "Trockenbiomasse" entfernen
+  summarise(mean_biom=mean(Trockenbiomasse),sd_biom=sd(Trockenbiomasse),  # Mittelwert und Standardabweichung von Trockenbiomasse and Individual weight berechnen
+            mean_ind=mean(Ind_Gewicht,na.rm=TRUE),sd_ind=sd(Ind_Gewicht,na.rm=TRUE),
+            n=sum(Daphien_Anzahl))                                        # Abundanzen ueber Replikate aufaddieren  
+```
 #### Plots
+Durchschnittliche totale Biomasse ueber Food concentration aufgetragen und farblich durch food quality unterschieden.
+```{r, echo=T, message=T, warning=FALSE} 
+total_Biomass <- ggplot(weight_mean,aes(x=Futter_Quant,y=mean_biom,colour=Futter_Hist))+
+  geom_point(size=3)+
+  geom_errorbar(aes(ymin=mean_biom-sd_biom,ymax=mean_biom+sd_biom,width=.5))+
+  labs(x=expression(paste("Food concentration [", mu, "g Chl a ", L^{-1}, "]")),
+       y=expression("Daphnia Biomasse [mg" ~Glas^{-1}~"]"),
+       color="Futter")+
+  scale_color_manual(values=c("#0FBF12","#E8AF05","#E62C29"))+
+  theme_bw()
+ggsave("~/Basic_Ecological_Processes/Plots/total_Biomass.png",plot=total_Biomass,width=10, height=7) 
+total_Biomass
+```  
+  
+  
+Durchschnittliche Biomasse pro Individuum ueber Food concentration aufgetragen und farblich durch food quality unterschieden.
+```{r, echo=T, message=T, warning=FALSE} 
+Ind_Biomass <- ggplot(weight_mean,aes(x=factor(Futter_Quant),y=mean_ind,colour=Futter_Hist))+
+  geom_point(size=3)+
+  geom_errorbar(aes(ymin=mean_ind-sd_ind,ymax=mean_ind+sd_ind,width=.08))+
+  labs(x=expression(paste("Food concentration [", mu, "g Chl a ", L^{-1}, "]")),
+       y=expression("Daphnia biomass [mg " ~Ind^{-1}~"]"),
+       color="Food")+
+  scale_color_manual(values=c("#0FBF12","#E8AF05","#E62C29"))+
+  theme_bw()+
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),
+        legend.title = element_text(size=14),
+        legend.text = element_text(size=12))
+ggsave("~/Basic_Ecological_Processes/Plots/Ind_Biomass.png",plot=Ind_Biomass,width=10, height=7)
+Ind_Biomass
+```
+  
+  
+Endabundanzen fuer verschiedene Treatments ueber die Replikate aufaddiert. Als schwarze Sterne sind noch die Startabundanzen als Referenz aufgetragen (3 Replikate * 4 Daphnien = 12)
+```{r, echo=T, message=T, warning=FALSE} 
+End_Abundance <- ggplot(weight_mean,aes(x=factor(Futter_Quant),y=n,colour=Futter_Hist))+
+  geom_point(size=3)+
+  geom_point(aes(x=factor(Futter_Quant),y=12),colour="#000000",shape=8)+
+  labs(x=expression(paste("Food concentration [", mu, "g Chl a ", L^{-1}, "]")),
+       y=expression("Daphnia individuals"),
+       color="Food")+
+  ylim(0,13)+
+  facet_wrap(~Futter_Hist,dir="v")+
+  scale_color_manual(values=c("#0FBF12","#E8AF05","#E62C29"))+
+  theme_bw()+
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14),
+        legend.title = element_text(size=14),
+        legend.text = element_text(size=12))
+ggsave("~/Basic_Ecological_Processes/Plots/End_Abundance.png",plot=End_Abundance,width=10, height=7)
+End_Abundance
+```
+
+
 
 #### Statistik
 ```{r, echo=T, message=F, results='hide',warning=FALSE} 
-trockengewichte <- read.csv("~/Basic_Ecological_Processes/Data/trockengewichte.csv")
 bartlett.test(Daphien_Anzahl~Futter_Hist,data=trockengewichte)
 bartlett.test(Daphien_Anzahl~Futter_Quant,data=trockengewichte)
 TukeyHSD(aov(Daphien_Anzahl~Futter_Hist*factor(Futter_Quant),data=trockengewichte))
@@ -137,8 +201,9 @@ b<-as.data.frame(a[3])
 #herausfiltern der signifikanten Vergleiche, um das Ganze ein bisschen übersichtlicher zu haben...
 b<-b[b[,4]>0.05,] 
 ```
+***
 ### Hypothesen-Plots
-Wir haben unsere Hypothesen lieber direkt graphisch dargestellt, um einen spaeteren Vergleich mit den Messergebnissen visuell ansprechender, einfacher und leichter nachvollziehbarer zu machen.
+Wir haben unsere Hypothesen lieber direkt graphisch dargestellt, um einen spaeteren Vergleich mit den Messergebnissen visuell ansprechender und leichter nachvollziehbar zu machen.
 
 ```{r,echo=T}
 conc <- 1:40
